@@ -1,0 +1,19 @@
+{:tasks
+ {:requires ([babashka.process :as p])
+  
+  test {:doc "Run tests with Kaocha"
+        :task (p/shell "clojure" "-M:test")}
+  
+  test-watch {:doc "Run tests in watch mode"
+              :task (p/shell "clojure" "-M:test" "--watch")}
+  
+  run {:doc "Run the application"
+       :task (p/shell "clojure" "-M:run")
+       :override-builtin true}
+  
+  repl {:doc "Start a REPL"
+        :task (p/shell "clojure" "-M:repl")
+        :override-builtin true}
+  
+  clean {:doc "Clean build artifacts"
+         :task (p/shell "rm" "-rf" ".cpcache" "target")}}}

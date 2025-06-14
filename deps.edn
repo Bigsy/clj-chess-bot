@@ -1,0 +1,23 @@
+{:paths ["src" "resources"]
+ :deps {org.clojure/clojure {:mvn/version "1.11.1"}
+        io.github.tors42/chariot {:mvn/version "0.1.16"}
+        org.clojure/core.async {:mvn/version "1.6.681"}
+        org.clojure/tools.logging {:mvn/version "1.2.4"}
+        ch.qos.logback/logback-classic {:mvn/version "1.4.14"}}
+ 
+ :aliases
+ {:test {:extra-paths ["test"]
+         :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+         :main-opts ["-m" "kaocha.runner"]}
+  
+  :run {:main-opts ["-m" "clj-chess-bot.core"]}
+  
+  :dev {:extra-paths ["dev"]
+        :extra-deps {}}
+  
+  :repl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}
+                      cider/cider-nrepl {:mvn/version "0.28.5"}}
+         :main-opts ["-m" "nrepl.cmdline" "--middleware" "[cider.nrepl/cider-middleware]"]}
+  
+  :uberjar {:extra-deps {io.github.clojure/tools.build {:mvn/version "0.10.7"}}
+            :ns-default build}}}
