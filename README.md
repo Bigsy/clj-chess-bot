@@ -2,7 +2,7 @@
 
 A basic chess bot implementation in Clojure that runs on Lichess.
 
-Come challange him here https://lichess.org/@/clj-bot but he's pretty rubbish atm.
+Challange him here https://lichess.org/@/clj-bot ...hes pretty bad for now...
 
 ## Running the Bot yourself
 
