@@ -83,7 +83,7 @@
       (if my-turn?
         (do
           (log/info "It's my turn - trying to make a move")
-          (if-let [move (game/select-move board :random)]
+          (if-let [move (game/select-move board color :smart)]
             (do
               (log/info (str "Generated move: " move))
               (let [result (lichess/make-move client game-id move)]
