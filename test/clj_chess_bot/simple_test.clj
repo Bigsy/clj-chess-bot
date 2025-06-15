@@ -1,6 +1,7 @@
 (ns clj-chess-bot.simple-test
   (:require [clojure.test :refer [deftest testing is]]
             [clj-chess-bot.core :as bot]
+            [clj-chess-bot.game :as game]
             [clj-chess-bot.test-helpers :as helpers])
   (:import [chariot.util Board]
            [java.time Duration]
@@ -9,16 +10,16 @@
 (deftest test-make-random-move
   (testing "makes valid move from starting position"
     (let [board (Board/fromFEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-          move (bot/make-random-move board)]
+          move (game/select-move board :random)]
       (is (string? move))
       (is (re-matches #"[a-h][1-8][a-h][1-8]" move))))
 
   (testing "returns nil when no valid moves"
     (let [board (Board/fromFEN "3k4/3P4/3K4/8/8/8/8/8 b - - 0 1")]
-      (is (nil? (bot/make-random-move board)))))
+      (is (nil? (game/select-move board :random)))))
 
   (testing "handles exception gracefully"
-    (is (nil? (bot/make-random-move nil)))))
+    (is (nil? (game/select-move nil :random)))))
 
 (deftest test-sleep-duration
   (testing "sleeps for specified duration"
@@ -97,11 +98,11 @@
   (testing "checkmate position has no valid moves"
     (let [checkmate-fen "rnb1kbnr/pppp1ppp/4p3/8/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
           board (Board/fromFEN checkmate-fen)
-          move (bot/make-random-move board)]
+          move (game/select-move board :random)]
       (is (nil? move))))
 
   (testing "stalemate position has no valid moves"
     (let [stalemate-fen "5k2/5P2/5K2/8/8/8/8/8 b - - 0 1"
           board (Board/fromFEN stalemate-fen)
-          move (bot/make-random-move board)]
+          move (game/select-move board :random)]
       (is (nil? move)))))

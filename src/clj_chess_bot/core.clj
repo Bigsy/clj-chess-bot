@@ -1,8 +1,8 @@
 (ns clj-chess-bot.core
-  (:require [clojure.tools.logging :as log])
-  (:import [chariot Client]
-           [java.time Duration]
-           [java.util Random Collections]
+  (:require [clojure.tools.logging :as log]
+            [clj-chess-bot.game :as game]
+            [clj-chess-bot.lichess :as lichess])
+  (:import [java.time Duration]
            [java.util.concurrent ConcurrentHashMap])
   (:gen-class))
 
@@ -40,19 +40,14 @@
     (do
       (log/info (str "DECLINING challenge - reason: " (:msg decline-info)))
       (try
-        (-> client .challenges (.declineChallenge (.id event) 
-                                 (fn [d] (case (:reason decline-info)
-                                          "generic" (.generic d)
-                                          "casual" (.casual d)
-                                          "later" (.later d)
-                                          (.generic d)))))
+        (lichess/decline-challenge client (.id event) (:reason decline-info))
         (log/info "Challenge declined successfully")
         (catch Exception e
           (log/error e "Failed to decline challenge"))))
     (do
       (log/info "ACCEPTING challenge")
       (try
-        (let [accept-result (-> client .challenges (.acceptChallenge (.id event)))]
+        (let [accept-result (lichess/accept-challenge client (.id event))]
           (log/info (str "Accept result type: " (type accept-result)))
           (log/info (str "Accept result: " accept-result))
           
@@ -66,19 +61,10 @@
                             "Again!"
                             (str "Hi " opponent "!\nI wish you a good game!"))]
               (log/info (str "Sending greeting: " greeting))
-              (-> client .bot (.chat (.id event) greeting)))))
+              (lichess/send-chat-message client (.id event) greeting))))
         (catch Exception e
           (log/error e "Error handling challenge accept"))))))
 
-(defn make-random-move [board]
-  (try
-    (let [valid-moves (vec (.validMoves board))]
-      (when (seq valid-moves)
-        (let [shuffled-moves (shuffle valid-moves)]
-          (-> shuffled-moves first .uci))))
-    (catch Exception e
-      (log/error e "Error making move")
-      nil)))
 
 (defn process-moves [game-id color fen-at-start moves client]
   (try
@@ -88,38 +74,28 @@
     (log/info (str "FEN at start: " fen-at-start))
     (log/info (str "Moves: '" moves "'"))
     
-    (let [board-class (Class/forName "chariot.util.Board")
-          from-fen-method (.getMethod board-class "fromFEN" (into-array Class [String]))
-          board (if (clojure.string/blank? moves)
-                  (.invoke from-fen-method nil (into-array Object [fen-at-start]))
-                  (let [initial-board (.invoke from-fen-method nil (into-array Object [fen-at-start]))]
-                    (.play initial-board moves)))
-          white-to-move? (.whiteToMove board)
-          my-turn? (if (= (str color) "white")
-                     white-to-move?
-                     (not white-to-move?))]
+    (let [initial-board (game/create-board-from-fen fen-at-start)
+          board (game/apply-moves-to-board initial-board moves)
+          my-turn? (game/is-my-turn? board color)]
       
-      (log/info (str "White to move: " white-to-move?))
       (log/info (str "My turn: " my-turn?))
       
       (if my-turn?
         (do
           (log/info "It's my turn - trying to make a move")
-          (if-let [move (make-random-move board)]
+          (if-let [move (game/select-move board :random)]
             (do
               (log/info (str "Generated move: " move))
-              (let [result (-> client .bot (.move game-id move))]
-                (log/info (str "Move result type: " (type result)))
-                (log/info (str "Move result: " result))
+              (let [result (lichess/make-move client game-id move)]
                 (let [result-type (str (type result))]
                   (if (= result-type "class chariot.model.Fail")
                     (do
                       (log/warn (str "Move failed: " result " - resigning"))
-                      (-> client .bot (.resign game-id)))
+                      (lichess/resign-game client game-id))
                     (log/info "Move submitted successfully")))))
             (do
               (log/warn "No move available - resigning")
-              (-> client .bot (.resign game-id)))))
+              (lichess/resign-game client game-id))))
         (log/info "Not my turn - waiting")))
     (catch Exception e
       (log/error e "Error processing moves"))))
@@ -145,7 +121,7 @@
             (cond
               (not= status-str "started")
               (do
-                (-> client .bot (.chat (.gameId game) "Thanks for the game!"))
+                (lichess/send-chat-message client (.gameId game) "Thanks for the game!")
                 (log/info (str "Game ended with status: " status-str)))
               
               :else
@@ -174,7 +150,7 @@
     (try
       (let [fen-at-start (.fen game)
             moves-since-start (atom 0)
-            connect-result (-> client .bot (.connectToGame game-id))]
+            connect-result (lichess/connect-to-game client game-id)]
         (log/info (str "Game connect result type: " (type connect-result)))
         (if (= (str (type connect-result)) "class chariot.model.Entries")
           (with-open [stream (.stream connect-result)]
@@ -187,9 +163,7 @@
                     (handle-game-state-event event game client fen-at-start moves-since-start)
                     (recur (inc event-count)))
                   (log/warn "Game event stream ended")))))
-          (do
-            (log/warn (str "Failed to connect to game " game-id ": " connect-result))
-            (-> client .bot (.resign game-id)))))
+          (lichess/resign-game client game-id)))
       (catch Exception e
         (log/error e "Error in game handler"))
       (finally
@@ -197,11 +171,9 @@
 
 (defn run-bot [client]
   (try
-    (let [events (-> client .bot .connect)]
-      (log/info "Connected to Lichess bot API")
-      (log/info (str "Events result type: " (type events)))
-      (if (= (str (type events)) "class chariot.model.Fail")
-        (log/warn (str "Failed to connect: " events))
+    (let [events (lichess/connect-to-bot-events client)]
+      (if (nil? events)
+        (log/warn "Failed to connect to bot events")
         (with-open [stream (.stream events)]
           (log/info "Event stream opened, waiting for events...")
           (let [start-time (System/currentTimeMillis)
@@ -237,35 +209,16 @@
       (log/error e "Error in bot runner"))))
 
 (defn initialize-client []
-  (try
-    (if-not bot-token
-      (do
-        (log/error "BOT_TOKEN environment variable not set")
-        nil)
-      (let [lichess-api (or (System/getenv "LICHESS_API") "https://lichess.org")
-            config-fn (reify java.util.function.Consumer
-                        (accept [_ builder]
-                          (.api builder (java.net.URI/create lichess-api))))
-            client (Client/auth config-fn bot-token)]
-        (log/info "Client created with token")
-        client))
-    (catch Exception e
-      (log/error e "Failed to initialize client")
-      nil)))
+  (if-not bot-token
+    (do
+      (log/error "BOT_TOKEN environment variable not set")
+      nil)
+    (lichess/create-client bot-token (System/getenv "LICHESS_API"))))
 
 (defn initialize-account [client]
-  (try
-    (let [profile-result (-> client .account .profile)]
-      (if (= (str (type profile-result)) "class chariot.model.Entry")
-        (let [account (.entry profile-result)]
-          (log/info (str "Account: " (.name account) " (title: " (.title account) ")"))
-          account)
-        (do
-          (log/error (str "Failed to get account profile: " profile-result))
-          nil)))
-    (catch Exception e
-      (log/error e "Failed to initialize account")
-      nil)))
+  (when-let [account (lichess/get-account-profile client)]
+    (log/info (str "Account: " (.name account) " (title: " (.title account) ")"))
+    account))
 
 (defn -main [& args]
   (log/info "Starting Clojure Chess Bot...")
