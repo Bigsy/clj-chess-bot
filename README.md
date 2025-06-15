@@ -13,7 +13,7 @@ export BOT_TOKEN=your_lichess_bot_token
 clj -M:run
 ```
 
-The bot will connect to Lichess and wait for challenges. It plays by making random legal moves for now.
+The bot will connect to Lichess and wait for challenges.
 
 ## Requirements
 
