@@ -10,3 +10,4 @@ CLAUDE.md
 /classes/
 *.iml
 /deploy.sh
+/.mcp.json
