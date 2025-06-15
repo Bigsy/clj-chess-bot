@@ -141,28 +141,35 @@
                     (not (move-gives-checkmate? board % color))) valid-moves))
     (catch Exception e [])))
 
-(defn evaluate-capture [board move]
-  "Evaluate a capture move, return positive if good, negative if bad"
+(defn evaluate-capture [board move color]
+  "Evaluate a capture move considering potential recaptures"
   (try
     (let [from-square (str (.from move))
           to-square (str (.to move))
           moving-piece (get-piece-at board from-square)
           captured-piece (get-piece-at board to-square)]
       (if (and moving-piece captured-piece (not= captured-piece "null"))
-        (- (get piece-values captured-piece 0)
-           (get piece-values moving-piece 0))
+        (let [captured-value (get piece-values captured-piece 0)
+              moving-value (get piece-values moving-piece 0)
+              test-board (.play board (.uci move))
+              opponent-color (if (= (str color) "white") "black" "white")
+              can-recapture? (is-piece-attacked? test-board to-square opponent-color)]
+          (if can-recapture?
+            (- captured-value moving-value)
+            captured-value))
         0))
     (catch Exception e 0)))
 
-(defn select-best-capture [board valid-moves]
+(defn select-best-capture [board valid-moves color]
   "Select the best capture move from valid moves"
   (let [moves-with-scores (map (fn [move]
                                 {:move move 
-                                 :score (evaluate-capture board move)})
+                                 :score (evaluate-capture board move color)})
                               valid-moves)
-        good-moves (filter #(>= (:score %) 0) moves-with-scores)]
-    (if (seq good-moves)
-      (-> good-moves shuffle first :move .uci)
+        good-moves (filter #(>= (:score %) 0) moves-with-scores)
+        sorted-moves (sort-by :score > good-moves)]
+    (if (seq sorted-moves)
+      (-> sorted-moves first :move .uci)
       (-> valid-moves shuffle first .uci))))
 
 (defn try-defend-hanging-pieces [board color valid-moves hanging-pieces]
@@ -177,30 +184,33 @@
             (.uci selected-move))
           (do
             (log/info "Selected defending move was nil, falling back to capture evaluation")
-            (select-best-capture board valid-moves))))
+            (select-best-capture board valid-moves color))))
       (do
         (log/info "No defending moves found, falling back to capture evaluation")
-        (select-best-capture board valid-moves)))))
+        (select-best-capture board valid-moves color)))))
 
 (defn make-smart-move [board color]
   "Generate a move prioritizing checkmate, check, defending pieces, and good captures"
   (try
     (let [valid-moves (vec (.validMoves board))]
       (when (seq valid-moves)
-        (let [checkmate-moves (find-checkmate-moves board color)]
-          (if (seq checkmate-moves)
-            (do
-              (log/info "Found checkmate move!")
-              (-> checkmate-moves shuffle first .uci))
-            (let [check-moves (find-check-moves board color)]
-              (if (seq check-moves)
-                (do
-                  (log/info "Found check move!")
-                  (-> check-moves shuffle first .uci))
-                (let [hanging-pieces (find-hanging-pieces board color)]
-                  (if (seq hanging-pieces)
-                    (try-defend-hanging-pieces board color valid-moves hanging-pieces)
-                    (select-best-capture board valid-moves)))))))))
+        (let [checkmate-moves (find-checkmate-moves board color)
+              check-moves (find-check-moves board color)
+              hanging-pieces (find-hanging-pieces board color)]
+          (cond
+            (seq checkmate-moves)
+            (do (log/info "Found checkmate move!")
+                (-> checkmate-moves shuffle first .uci))
+            
+            (seq check-moves)
+            (do (log/info "Found check move!")
+                (-> check-moves shuffle first .uci))
+            
+            (seq hanging-pieces)
+            (try-defend-hanging-pieces board color valid-moves hanging-pieces)
+            
+            :else
+            (select-best-capture board valid-moves color)))))
     (catch Exception e
       (log/error e "Error making smart move")
       nil)))

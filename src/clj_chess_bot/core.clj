@@ -23,9 +23,6 @@
       (not (.isPresent challenger-opt))
       {:reason "generic" :msg "No challenger"}
       
-      (.rated game-type)
-      {:reason "casual" :msg "Rated"}
-      
       (> (.size games) 8)
       {:reason "later" :msg "Too many games"}
       

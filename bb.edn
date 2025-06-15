@@ -16,4 +16,7 @@
         :override-builtin true}
   
   clean {:doc "Clean build artifacts"
-         :task (p/shell "rm" "-rf" ".cpcache" "target")}}}
+         :task (p/shell "rm" "-rf" ".cpcache" "target")}
+  
+  uberjar {:doc "Build uberjar"
+           :task (p/shell "clojure" "-T:build" "uberjar")}}}}
