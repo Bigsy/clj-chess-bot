@@ -19,4 +19,5 @@
          :task (p/shell "rm" "-rf" ".cpcache" "target")}
   
   uberjar {:doc "Build uberjar"
-           :task (p/shell "clojure" "-T:build" "uberjar")}}}}
+           :task (p/shell "clojure" "-T:build" "uberjar")
+           :override-builtin true}}}}

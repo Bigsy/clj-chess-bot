@@ -1,4 +1,7 @@
 #kaocha/v1
 {:tests [{:id :unit
           :test-paths ["test"]
-          :source-paths ["src"]}]}
+          :source-paths ["src"]
+          :parallel true
+          :kaocha.plugin.randomize/randomize? true}]
+ :plugins [:kaocha.plugin/randomize]}

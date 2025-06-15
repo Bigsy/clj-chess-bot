@@ -19,10 +19,9 @@
       (is (= {:reason "generic" :msg "No challenger"}
              (bot/decline-challenge? event)))))
 
-  (testing "decline rated games"
+  (testing "accept rated games"
     (let [event (helpers/make-challenge-event "challenge-2" true)]
-      (is (= {:reason "casual" :msg "Rated"}
-             (bot/decline-challenge? event)))))
+      (is (nil? (bot/decline-challenge? event)))))
 
   (testing "decline when too many games"
     (let [event (helpers/make-challenge-event "challenge-3" false)]
