@@ -18,7 +18,7 @@
 
 (deftest test-smart-move-selection
   (testing "prefers capturing higher value pieces"
-    (let [fen "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
+    (let [fen "r1bqkb1r/ppp2ppp/2np1n2/4p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 0 5"
           board (Board/fromFEN fen)
           move (game/make-smart-move board "white")]
       (is (string? move))

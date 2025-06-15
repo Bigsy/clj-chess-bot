@@ -5,7 +5,7 @@
 
 (deftest test-self-play-hanging-piece-detection
   (testing "bot detects and defends hanging pieces in self-play"
-    ; Position where black has a hanging bishop on c4 that white can capture
+    ; Position where black has a hanging bishop on c5 that white can capture
     (let [fen-with-hanging-piece "rnbqk1nr/pppp1ppp/8/2b1p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq - 4 3"
           board (Board/fromFEN fen-with-hanging-piece)]
       
