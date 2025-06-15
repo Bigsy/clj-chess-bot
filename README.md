@@ -23,6 +23,5 @@ The bot will connect to Lichess and wait for challenges.
 ## Features
 
 - Accepts challenges automatically
-- Makes random legal moves
 - Handles basic game events
 - Auto-reconnects on failures
