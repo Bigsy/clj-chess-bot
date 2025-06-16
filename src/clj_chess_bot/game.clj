@@ -6,6 +6,10 @@
   {"p" 1 "n" 3 "b" 3 "r" 5 "q" 9 "k" 0
    "P" 1 "N" 3 "B" 3 "R" 5 "Q" 9 "K" 0})
 
+(def center-squares #{"d4" "d5" "e4" "e5"})
+(def extended-center-squares #{"c3" "c4" "c5" "c6" "d3" "d4" "d5" "d6" 
+                               "e3" "e4" "e5" "e6" "f3" "f4" "f5" "f6"})
+
 (def chess-squares
   ["a1" "b1" "c1" "d1" "e1" "f1" "g1" "h1"
    "a2" "b2" "c2" "d2" "e2" "f2" "g2" "h2"
@@ -160,6 +164,24 @@
         0))
     (catch Exception e 0)))
 
+(defn evaluate-center-control [board move color]
+  "Evaluate how much a move improves central control"
+  (try
+    (let [to-square (str (.to move))
+          from-square (str (.from move))
+          moving-piece (get-piece-at board from-square)
+          center-bonus (cond
+                         (center-squares to-square) 15
+                         (extended-center-squares to-square) 5
+                         :else 0)
+          piece-bonus (cond
+                        (= (clojure.string/lower-case moving-piece) "p") 2
+                        (= (clojure.string/lower-case moving-piece) "n") 3
+                        (= (clojure.string/lower-case moving-piece) "b") 2
+                        :else 1)]
+      (* center-bonus piece-bonus))
+    (catch Exception e 0)))
+
 (defn select-best-capture [board valid-moves color]
   "Select the best capture move from valid moves"
   (let [moves-with-scores (map (fn [move]
@@ -171,6 +193,21 @@
     (if (seq sorted-moves)
       (-> sorted-moves first :move .uci)
       (-> valid-moves shuffle first .uci))))
+
+(defn select-positional-move [board valid-moves color]
+  "Select move based on positional factors when no tactics available"
+  (let [moves-with-scores (map (fn [move]
+                                {:move move 
+                                 :center-score (evaluate-center-control board move color)
+                                 :capture-score (evaluate-capture board move color)})
+                              valid-moves)
+        moves-with-total (map (fn [move-data]
+                               (assoc move-data :total-score 
+                                      (+ (:center-score move-data) 
+                                         (:capture-score move-data))))
+                             moves-with-scores)
+        sorted-moves (sort-by :total-score > moves-with-total)]
+    (-> sorted-moves first :move .uci)))
 
 (defn try-defend-hanging-pieces [board color valid-moves hanging-pieces]
   "Try to defend hanging pieces, fallback to best capture"
@@ -210,7 +247,7 @@
             (try-defend-hanging-pieces board color valid-moves hanging-pieces)
             
             :else
-            (select-best-capture board valid-moves color)))))
+            (select-positional-move board valid-moves color)))))
     (catch Exception e
       (log/error e "Error making smart move")
       nil)))
