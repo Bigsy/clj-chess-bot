@@ -164,6 +164,33 @@
         0))
     (catch Exception e 0)))
 
+(defn is-capture? [board move]
+  "Check if a move is a capture"
+  (try
+    (let [to-square (str (.to move))
+          captured-piece (get-piece-at board to-square)]
+      (and captured-piece (not= captured-piece "null") (not= captured-piece "")))
+    (catch Exception e false)))
+
+(defn is-good-capture? [board move color]
+  "Check if a move is a capture that gains material"
+  (and (is-capture? board move)
+       (>= (evaluate-capture board move color) 0)))
+
+(defn creates-threat? [board move color]
+  "Check if a move creates a threat against an opponent piece"
+  (try
+    (let [test-board (.play board (.uci move))
+          opponent-color (if (= (str color) "white") "black" "white")
+          opponent-pieces (get-our-pieces test-board opponent-color)]
+      (some (fn [square]
+              (let [piece (get-piece-at test-board square)
+                    piece-value (get piece-values piece 0)]
+                (and (> piece-value 1)
+                     (is-piece-attacked? test-board square color))))
+            opponent-pieces))
+    (catch Exception e false)))
+
 (defn evaluate-center-control [board move color]
   "Evaluate how much a move improves central control"
   (try
@@ -181,6 +208,22 @@
                         :else 1)]
       (* center-bonus piece-bonus))
     (catch Exception e 0)))
+
+(defn order-moves [board moves color]
+  "Order moves by tactical priority: captures, checks, threats, others"
+  (try
+    (let [moves-with-scores (map (fn [move]
+                                  (let [capture-score (if (is-good-capture? board move color) 1000 0)
+                                        check-score (if (move-gives-check? board move color) 500 0)
+                                        threat-score (if (creates-threat? board move color) 100 0)
+                                        center-score (evaluate-center-control board move color)
+                                        total-score (+ capture-score check-score threat-score center-score)]
+                                    {:move move :score total-score}))
+                                moves)]
+      (map :move (sort-by :score > moves-with-scores)))
+    (catch Exception e
+      (log/error e "Error ordering moves")
+      moves)))
 
 (defn select-best-capture [board valid-moves color]
   "Select the best capture move from valid moves"
@@ -227,27 +270,24 @@
         (select-best-capture board valid-moves color)))))
 
 (defn make-smart-move [board color]
-  "Generate a move prioritizing checkmate, check, defending pieces, and good captures"
+  "Generate a move using move ordering to prioritize tactical opportunities"
   (try
     (let [valid-moves (vec (.validMoves board))]
       (when (seq valid-moves)
         (let [checkmate-moves (find-checkmate-moves board color)
-              check-moves (find-check-moves board color)
               hanging-pieces (find-hanging-pieces board color)]
           (cond
             (seq checkmate-moves)
             (do (log/info "Found checkmate move!")
                 (-> checkmate-moves shuffle first .uci))
             
-            (seq check-moves)
-            (do (log/info "Found check move!")
-                (-> check-moves shuffle first .uci))
-            
             (seq hanging-pieces)
             (try-defend-hanging-pieces board color valid-moves hanging-pieces)
             
             :else
-            (select-positional-move board valid-moves color)))))
+            (let [ordered-moves (order-moves board valid-moves color)]
+              (log/info (str "Using move ordering - evaluating " (count ordered-moves) " moves"))
+              (-> ordered-moves first .uci))))))
     (catch Exception e
       (log/error e "Error making smart move")
       nil)))
