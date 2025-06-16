@@ -1,0 +1,11 @@
+target/
+.git/
+.github/
+*.md
+.gitignore
+.dockerignore
+Dockerfile
+.cpcache/
+.nrepl-port
+.lsp/
+.clj-kondo/
