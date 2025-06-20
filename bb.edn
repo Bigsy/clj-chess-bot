@@ -20,4 +20,10 @@
   
   uberjar {:doc "Build uberjar"
            :task (p/shell "clojure" "-T:build" "uberjar")
-           :override-builtin true}}}}
+           :override-builtin true}
+  
+  docker {:doc "Build Docker image for linux/arm64"
+          :task (p/shell "docker" "buildx" "build" "--platform" "linux/arm64" "-t" "clj-chess-bot" ".")}
+  
+  docker-inspect {:doc "Check Docker image platform"
+                  :task (p/shell "docker" "inspect" "clj-chess-bot" "--format" "{{.Os}}/{{.Architecture}}")}}}}
