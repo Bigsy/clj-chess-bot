@@ -145,6 +145,22 @@
                     (not (move-gives-checkmate? board % color))) valid-moves))
     (catch Exception e [])))
 
+(defn mvv-lva-score [board move]
+  "Calculate MVV-LVA score: (6 * CapturedPieceValue - AttackingPieceValue) * 100"
+  (try
+    (let [from-square (str (.from move))
+          to-square (str (.to move))
+          moving-piece (get-piece-at board from-square)
+          captured-piece (get-piece-at board to-square)]
+      (if (and moving-piece captured-piece 
+               (not= captured-piece "null") 
+               (not= captured-piece ""))
+        (let [captured-value (get piece-values captured-piece 0)
+              moving-value (get piece-values moving-piece 0)]
+          (* (- (* 6 captured-value) moving-value) 100))
+        0))
+    (catch Exception e 0)))
+
 (defn evaluate-capture [board move color]
   "Evaluate a capture move considering potential recaptures"
   (try
@@ -210,14 +226,16 @@
     (catch Exception e 0)))
 
 (defn order-moves [board moves color]
-  "Order moves by tactical priority: captures, checks, threats, others"
+  "Order moves by tactical priority using MVV-LVA for captures"
   (try
     (let [moves-with-scores (map (fn [move]
-                                  (let [capture-score (if (is-good-capture? board move color) 1000 0)
+                                  (let [mvv-lva-capture-score (if (is-capture? board move)
+                                                                (mvv-lva-score board move)
+                                                                0)
                                         check-score (if (move-gives-check? board move color) 500 0)
                                         threat-score (if (creates-threat? board move color) 100 0)
                                         center-score (evaluate-center-control board move color)
-                                        total-score (+ capture-score check-score threat-score center-score)]
+                                        total-score (+ mvv-lva-capture-score check-score threat-score center-score)]
                                     {:move move :score total-score}))
                                 moves)]
       (map :move (sort-by :score > moves-with-scores)))
