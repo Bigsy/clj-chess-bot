@@ -89,14 +89,18 @@
     (catch Exception e [])))
 
 (defn find-defending-moves [board hanging-square color]
-  "Find moves that can defend a hanging piece"
+  "Find moves that defend a hanging piece without creating new hanging pieces"
   (try
     (let [valid-moves (vec (.validMoves board))
-          opponent-color (if (= (str color) "white") "black" "white")]
+          opponent-color (if (= (str color) "white") "black" "white")
+          original-hanging-count (count (find-hanging-pieces board color))]
       (filter (fn [move]
                 (try
-                  (let [test-board (.play board (.uci move))]
-                    (not (is-piece-attacked? test-board hanging-square opponent-color)))
+                  (let [test-board (.play board (.uci move))
+                        defends-piece? (not (is-piece-attacked? test-board hanging-square opponent-color))
+                        new-hanging-count (count (find-hanging-pieces test-board color))]
+                    (and defends-piece? 
+                         (<= new-hanging-count original-hanging-count)))
                   (catch Exception e false)))
               valid-moves))
     (catch Exception e [])))
@@ -226,31 +230,37 @@
     (catch Exception e 0)))
 
 (defn order-moves [board moves color]
-  "Order moves by tactical priority using MVV-LVA for captures"
+  "Order moves by tactical priority using MVV-LVA for good captures"
   (try
     (let [moves-with-scores (map (fn [move]
-                                  (let [mvv-lva-capture-score (if (is-capture? board move)
+                                  (let [mvv-lva-capture-score (if (is-good-capture? board move color)
                                                                 (mvv-lva-score board move)
                                                                 0)
-                                        check-score (if (move-gives-check? board move color) 500 0)
+                                        check-score (if (move-gives-check? board move color) 
+                                                      (if (is-capture? board move)
+                                                        (if (>= (evaluate-capture board move color) 0) 500 0)
+                                                        500)
+                                                      0)
                                         threat-score (if (creates-threat? board move color) 100 0)
                                         center-score (evaluate-center-control board move color)
                                         total-score (+ mvv-lva-capture-score check-score threat-score center-score)]
                                     {:move move :score total-score}))
-                                moves)]
-      (map :move (sort-by :score > moves-with-scores)))
+                                moves)
+          sorted (map :move (sort-by :score > moves-with-scores))]
+      (log/info (str "1st mvv-lva move: " (first sorted)))
+      sorted)
     (catch Exception e
       (log/error e "Error ordering moves")
       moves)))
 
 (defn select-best-capture [board valid-moves color]
-  "Select the best capture move from valid moves"
-  (let [moves-with-scores (map (fn [move]
+  "Select the best capture move using MVV-LVA scoring"
+  (let [capture-moves (filter #(is-capture? board %) valid-moves)
+        moves-with-scores (map (fn [move]
                                 {:move move 
-                                 :score (evaluate-capture board move color)})
-                              valid-moves)
-        good-moves (filter #(>= (:score %) 0) moves-with-scores)
-        sorted-moves (sort-by :score > good-moves)]
+                                 :score (mvv-lva-score board move)})
+                              capture-moves)
+        sorted-moves (sort-by :score > moves-with-scores)]
     (if (seq sorted-moves)
       (-> sorted-moves first :move .uci)
       (-> valid-moves shuffle first .uci))))
